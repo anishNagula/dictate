@@ -98,6 +98,18 @@ Now pressing your hotkey will:
 - Stop on silence
 - Paste transcription into active app
 
+## UI Overlay
+
+Dictate includes a macOS Swift-based waveform overlay app.
+
+Build:
+cd overlay
+swiftc main.swift -o DictateOverlay
+cp DictateOverlay DictateOverlay.app/Contents/MacOS/
+
+Run:
+./DictateOverlay.app/Contents/MacOS/DictateOverlay
+
 ## Silence Detection
 - 5 second grace period before silence detection
 - Stops after 1 second of silence
