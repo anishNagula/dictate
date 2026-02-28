@@ -1,0 +1,3 @@
+[submodule "engine/whisper"]
+	path = engine/whisper
+	url = https://github.com/ggerganov/whisper.cpp
