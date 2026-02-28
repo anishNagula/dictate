@@ -5,6 +5,7 @@
 #include <cmath>
 #include <atomic>
 #include <unistd.h>
+#include <cstdio>
 
 struct RecorderState {
     std::vector<float>* samples;
@@ -36,6 +37,10 @@ AudioRecorder::AudioRecorder() {}
 AudioRecorder::~AudioRecorder() {}
 
 bool AudioRecorder::record(std::vector<float>& outSamples) {
+
+    // 🔥 CRITICAL: disable stdout buffering for real-time AMP streaming
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     outSamples.clear();
 
     AudioStreamBasicDescription format{};
@@ -55,7 +60,6 @@ bool AudioRecorder::record(std::vector<float>& outSamples) {
     AudioQueueRef queue;
     if (AudioQueueNewInput(&format, audioCallback, &state,
                            nullptr, nullptr, 0, &queue) != noErr) {
-        std::cerr << "Failed to create AudioQueue\n";
         return false;
     }
 
@@ -67,50 +71,56 @@ bool AudioRecorder::record(std::vector<float>& outSamples) {
         AudioQueueEnqueueBuffer(queue, buffer, 0, nullptr);
     }
 
-    // Start beep (reliable)
-    system("afplay /System/Library/Sounds/Pop.aiff &");
-
-    std::cout << "Recording... Speak now.\n";
     AudioQueueStart(queue, nullptr);
 
-    const float SILENCE_THRESHOLD = 0.015f;      // slightly higher for stability
-    const int   SILENCE_FRAMES    = SAMPLE_RATE * 1.0;  // 1 second silence
-    const int   MAX_FRAMES        = SAMPLE_RATE * 15;   // 15 second cap
-    const int   MIN_FRAMES        = SAMPLE_RATE * 0.5;  // 500ms minimum recording
-    const int SILENCE_GRACE_FRAMES = SAMPLE_RATE * 5;  // 5 seconds before silence detection
+    const float SILENCE_THRESHOLD    = 0.015f;
+    const int   SILENCE_FRAMES       = SAMPLE_RATE * 1.0;   // 1 second silence
+    const int   MAX_FRAMES           = SAMPLE_RATE * 15;    // 15 sec max
+    const int   SILENCE_GRACE_FRAMES = SAMPLE_RATE * 3;     // 3 sec grace
 
     int silentFrames = 0;
+    bool speechDetected = false;
 
     while (true) {
-        usleep(10000); // 10ms polling
-    
+
+        usleep(10000); // 10ms polling (correct value)
+
         int total = outSamples.size();
-    
+
         if (total >= MAX_FRAMES)
             break;
-    
-        // 🔒 Do not check silence for first 5 seconds
-        if (total < SILENCE_GRACE_FRAMES)
-            continue;
-    
+
         int window = SAMPLE_RATE / 10; // 100ms window
-    
+
         if (total < window)
             continue;
-    
+
         float rms = 0.0f;
         for (int i = total - window; i < total; ++i)
             rms += outSamples[i] * outSamples[i];
-    
+
         rms = sqrt(rms / window);
-    
-        if (rms < SILENCE_THRESHOLD)
-            silentFrames += window;
-        else
-            silentFrames = 0;
-    
-        if (silentFrames >= SILENCE_FRAMES)
-            break;
+
+        // 🔥 Stream amplitude to overlay
+        std::cout << "AMP:" << rms << "\n";
+
+        // Track if user actually spoke
+        if (rms > SILENCE_THRESHOLD)
+            speechDetected = true;
+
+        // Don't check silence too early
+        if (total < SILENCE_GRACE_FRAMES)
+            continue;
+
+        if (speechDetected) {
+            if (rms < SILENCE_THRESHOLD)
+                silentFrames += window;
+            else
+                silentFrames = 0;
+
+            if (silentFrames >= SILENCE_FRAMES)
+                break;
+        }
     }
 
     state.recording = false;
@@ -118,10 +128,7 @@ bool AudioRecorder::record(std::vector<float>& outSamples) {
     AudioQueueStop(queue, true);
     AudioQueueDispose(queue, true);
 
-    // Stop beep
-    system("afplay /System/Library/Sounds/Glass.aiff &");
+    std::cout << "DONE\n";
 
-    std::cout << "Recording finished.\n";
-
-    return !outSamples.empty();
+    return speechDetected; // prevent blank_audio case
 }

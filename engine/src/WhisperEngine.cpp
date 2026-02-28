@@ -16,7 +16,7 @@ WhisperEngine::~WhisperEngine() {
 }
 
 bool WhisperEngine::initialize() {
-
+    whisper_log_set([](enum ggml_log_level, const char *, void *) {}, nullptr);
     // --- Temporarily suppress stdout ---
     fflush(stdout);
     int original_stdout = dup(fileno(stdout));
