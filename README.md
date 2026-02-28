@@ -73,12 +73,7 @@ sudo cp build/dictate /usr/local/bin/dictate
 
 Test:
 ```bash
-```bash
 dictate
-```
-```
-```
-```dictate
 ```
 
 ## First Run Permissions
